@@ -40,8 +40,8 @@ def decrypt_stream(filepath):
             yield decrypted
 
 
-@app.get("/")
-async def root():
+@app.get("/api/status")
+async def api_status():
     songs = list_songs()
     return {
         "status": "ok",
