@@ -18,7 +18,7 @@ export function createLyricsPanel() {
 }
 
 export function loadLyrics(songId, callback) {
-  fetch(`http://100.90.30.108:8000/lyrics/${songId}`)
+  fetch(`/lyrics/${songId}`)
     .then(r => r.json())
     .then(data => {
       if (data.lrc) {

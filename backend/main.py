@@ -1,15 +1,17 @@
 import asyncio
+import os
 import time
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from audio_processor import list_songs, get_song_by_id, load_frames, decrypt_file_bytes
+from audio_processor import list_songs, get_song_by_id, load_frames
 from ws_manager import ConnectionManager
 from lyrics_loader import get_lyrics
-from config import SAMPLE_RATE, FFT_SIZE, HOP_LENGTH, FRAME_INTERVAL
+from config import SAMPLE_RATE, FFT_SIZE, HOP_LENGTH, FRAME_INTERVAL, BASE_DIR
 
 app = FastAPI(title="El Tocadiscos Reactivo")
 
@@ -22,6 +24,20 @@ app.add_middleware(
 )
 
 manager = ConnectionManager()
+
+CHUNK = 65536
+
+def decrypt_stream(filepath):
+    KEY = bytes([0xD4, 0xB0, 0xE6, 0xC9, 0xA0, 0xDC])
+    with open(filepath, "rb") as f:
+        offset = 0
+        while True:
+            chunk = f.read(CHUNK)
+            if not chunk:
+                break
+            decrypted = bytes(b ^ KEY[(offset + i) % len(KEY)] for i, b in enumerate(chunk))
+            offset += len(chunk)
+            yield decrypted
 
 
 @app.get("/")
@@ -38,22 +54,6 @@ async def songs():
     return list_songs()
 
 
-CHUNK = 65536
-
-
-def decrypt_stream(filepath):
-    KEY = bytes([0xD4, 0xB0, 0xE6, 0xC9, 0xA0, 0xDC])
-    with open(filepath, "rb") as f:
-        offset = 0
-        while True:
-            chunk = f.read(CHUNK)
-            if not chunk:
-                break
-            decrypted = bytes(b ^ KEY[(offset + i) % len(KEY)] for i, b in enumerate(chunk))
-            offset += len(chunk)
-            yield decrypted
-
-
 @app.get("/audio/{song_id}")
 async def get_audio(song_id: int):
     song = get_song_by_id(song_id)
@@ -62,7 +62,6 @@ async def get_audio(song_id: int):
     return StreamingResponse(
         decrypt_stream(song["path"]),
         media_type="audio/mpeg",
-        headers={"Content-Disposition": f"inline"},
     )
 
 
@@ -116,6 +115,11 @@ async def websocket_endpoint(ws: WebSocket, song: int = Query(default=0)):
         manager.disconnect(ws)
     except Exception:
         manager.disconnect(ws)
+
+
+frontend_dir = os.path.join(os.path.dirname(BASE_DIR), "frontend")
+if os.path.isdir(frontend_dir):
+    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
 
 if __name__ == "__main__":

@@ -36,7 +36,7 @@ const nowPlaying = document.getElementById('now-playing');
 const plList = document.getElementById('pl-list');
 
 async function loadSongs() {
-  const res = await fetch('http://100.90.30.108:8000/songs');
+  const res = await fetch('/songs');
   songs = await res.json();
   renderPlaylist();
   if (songs.length) selectSong(songs[0].id);
@@ -85,10 +85,10 @@ function selectSong(id) {
   });
 
   if (playing) {
-    audio.src = `http://100.90.30.108:8000/audio/${id}`;
+    audio.src = `/audio/${id}`;
     audio.play();
   } else {
-    audio.src = `http://100.90.30.108:8000/audio/${id}`;
+    audio.src = `/audio/${id}`;
   }
 }
 

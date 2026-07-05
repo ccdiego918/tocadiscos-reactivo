@@ -1,6 +1,7 @@
 export function connectWebSocket(songId, onData) {
-  const url = songId ? `ws://100.90.30.108:8000/ws?song=${songId}` : 'ws://100.90.30.108:8000/ws';
-  const ws = new WebSocket(url);
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const base = songId ? `/ws?song=${songId}` : '/ws';
+  const ws = new WebSocket(`${protocol}//${window.location.host}${base}`);
 
   ws.onopen = () => {
     console.log(`[WS] conectado (song=${songId})`);
