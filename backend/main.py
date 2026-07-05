@@ -1,10 +1,11 @@
 import asyncio
 import os
+import re
 import time
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
@@ -26,17 +27,23 @@ app.add_middleware(
 manager = ConnectionManager()
 
 CHUNK = 65536
+KEY = bytes([0xD4, 0xB0, 0xE6, 0xC9, 0xA0, 0xDC])
 
-def decrypt_stream(filepath):
-    KEY = bytes([0xD4, 0xB0, 0xE6, 0xC9, 0xA0, 0xDC])
+def decrypt_stream(filepath, start=0, length=None):
     with open(filepath, "rb") as f:
-        offset = 0
+        if start:
+            f.seek(start)
+        offset = start
+        remaining = length
         while True:
-            chunk = f.read(CHUNK)
+            chunk_size = CHUNK if remaining is None else min(CHUNK, remaining)
+            chunk = f.read(chunk_size)
             if not chunk:
                 break
             decrypted = bytes(b ^ KEY[(offset + i) % len(KEY)] for i, b in enumerate(chunk))
             offset += len(chunk)
+            if remaining is not None:
+                remaining -= len(chunk)
             yield decrypted
 
 
@@ -64,25 +71,85 @@ async def songs():
 
 
 @app.get("/audio/{song_id}")
-async def get_audio(song_id: int):
+async def get_audio(song_id: int, request: Request):
     song = get_song_by_id(song_id)
     if not song:
-        return {"error": "song not found"}, 404
+        return JSONResponse({"error": "song not found"}, status_code=404)
+
+    filepath = song["path"]
+    file_size = os.path.getsize(filepath)
+    range_header = request.headers.get("range")
+
+    if range_header:
+        match = re.match(r"bytes=(\d+)-(\d*)", range_header)
+        if match:
+            start = int(match.group(1))
+            end_str = match.group(2)
+            end = int(end_str) if end_str else file_size - 1
+            start = max(0, min(start, file_size - 1))
+            end = max(start, min(end, file_size - 1))
+            content_length = end - start + 1
+
+            return StreamingResponse(
+                decrypt_stream(filepath, start=start, length=content_length),
+                status_code=206,
+                media_type="audio/mpeg",
+                headers={
+                    "Content-Range": f"bytes {start}-{end}/{file_size}",
+                    "Content-Length": str(content_length),
+                    "Accept-Ranges": "bytes",
+                }
+            )
+
     return StreamingResponse(
-        decrypt_stream(song["path"]),
+        decrypt_stream(filepath),
         media_type="audio/mpeg",
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(file_size),
+        }
     )
 
 
 @app.get("/audio")
-async def get_audio_default():
+async def get_audio_default(request: Request):
     songs = list_songs()
-    if songs:
-        return StreamingResponse(
-            decrypt_stream(songs[0]["path"]),
-            media_type="audio/mpeg",
-        )
-    return {"error": "no songs"}, 404
+    if not songs:
+        return JSONResponse({"error": "no songs"}, status_code=404)
+
+    filepath = songs[0]["path"]
+    file_size = os.path.getsize(filepath)
+    range_header = request.headers.get("range")
+
+    if range_header:
+        match = re.match(r"bytes=(\d+)-(\d*)", range_header)
+        if match:
+            start = int(match.group(1))
+            end_str = match.group(2)
+            end = int(end_str) if end_str else file_size - 1
+            start = max(0, min(start, file_size - 1))
+            end = max(start, min(end, file_size - 1))
+            content_length = end - start + 1
+
+            return StreamingResponse(
+                decrypt_stream(filepath, start=start, length=content_length),
+                status_code=206,
+                media_type="audio/mpeg",
+                headers={
+                    "Content-Range": f"bytes {start}-{end}/{file_size}",
+                    "Content-Length": str(content_length),
+                    "Accept-Ranges": "bytes",
+                }
+            )
+
+    return StreamingResponse(
+        decrypt_stream(filepath),
+        media_type="audio/mpeg",
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(file_size),
+        }
+    )
 
 
 @app.get("/lyrics/{song_id}")
