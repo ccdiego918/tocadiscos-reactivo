@@ -48,6 +48,15 @@ async def api_status():
         "songs": len(songs),
     }
 
+@app.get("/api/url")
+async def api_url():
+    try:
+        with open("/tmp/tunnel_url.txt") as f:
+            url = f.read().strip()
+        return {"url": url}
+    except (FileNotFoundError, IOError):
+        return {"url": None, "error": "tunnel_url.txt not found"}
+
 
 @app.get("/songs")
 async def songs():
