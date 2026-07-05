@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>El Tocadiscos Reactivo</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="info">
+    <span class="title">♫</span>
+    <span class="sub">conectando...</span>
+  </div>
+
+  <div id="now-playing"></div>
+
+  <div id="playlist">
+    <div class="pl-header">you seem pretty sad<br/>for a girl so in love</div>
+    <div class="pl-list" id="pl-list"></div>
+  </div>
+
+  <div id="play-overlay">
+    <div class="play-btn">▶</div>
+    <div class="play-label">tocar</div>
+  </div>
+
+  <audio id="audio" preload="auto"></audio>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
