@@ -7,6 +7,8 @@ import { createParticles, updateParticles } from './particles.js';
 import { createBloom } from './postfx.js';
 import { createLyricsPanel, loadLyrics, renderLyrics, updateLyrics } from './lyrics.js';
 
+const FRAME_INTERVAL = 0.02322;
+
 const { renderer, scene, camera, topGlow } = createScene();
 
 const { composer, bloomPass } = createBloom(renderer, scene, camera);
@@ -27,6 +29,7 @@ let currentSongId = null;
 let songs = [];
 let songTitle = '';
 let currentLyrics = [];
+let seeking = false;
 
 const audio = document.getElementById('audio');
 const overlay = document.getElementById('play-overlay');
@@ -34,12 +37,24 @@ const overlay = document.getElementById('play-overlay');
 const lyricsPanel = createLyricsPanel();
 const nowPlaying = document.getElementById('now-playing');
 const plList = document.getElementById('pl-list');
+const seekBar = document.getElementById('seek-bar');
+const controls = document.getElementById('controls');
+const btnPrev = document.getElementById('btn-prev');
+const btnNext = document.getElementById('btn-next');
+
+function startWs(id, startFrame) {
+  if (ws) { ws.close(); ws = null; }
+  ws = connectWebSocket(id, startFrame || 0, (data) => {
+    latestFFT = data.frequencies;
+    if (!playing) document.querySelector('.sub').textContent = 'conectado';
+  });
+}
 
 async function loadSongs() {
   const res = await fetch('/songs');
   songs = await res.json();
   renderPlaylist();
-  if (songs.length) selectSong(songs[0].id);
+  if (songs.length) selectSong(songs[0].id, 0);
 }
 
 function renderPlaylist() {
@@ -49,13 +64,13 @@ function renderPlaylist() {
     item.className = 'pl-item';
     item.dataset.id = s.id;
     item.innerHTML = `<span class="pl-num">${String(i + 1).padStart(2, '0')}</span><span class="pl-title">${s.title}</span>`;
-    item.addEventListener('click', () => selectSong(s.id));
+    item.addEventListener('click', () => selectSong(s.id, 0));
     plList.appendChild(item);
   });
 }
 
-function selectSong(id) {
-  if (id === currentSongId && ws) return;
+function selectSong(id, startFrame) {
+  if (id === currentSongId && startFrame === 0 && ws) return;
 
   currentSongId = id;
   const song = songs.find(s => s.id === id);
@@ -65,17 +80,7 @@ function selectSong(id) {
     el.classList.toggle('active', Number(el.dataset.id) === id);
   });
 
-  if (ws) {
-    ws.close();
-    ws = null;
-  }
-
-  ws = connectWebSocket(id, (data) => {
-    latestFFT = data.frequencies;
-    if (!playing) {
-      document.querySelector('.sub').textContent = 'conectado';
-    }
-  });
+  startWs(id, startFrame);
 
   currentLyrics = [];
   renderLyrics(lyricsPanel, [{ text: 'cargando letra...' }]);
@@ -86,16 +91,27 @@ function selectSong(id) {
 
   if (playing) {
     audio.src = `/audio/${id}`;
+    audio.currentTime = (startFrame || 0) * FRAME_INTERVAL;
     audio.play();
   } else {
     audio.src = `/audio/${id}`;
+    audio.currentTime = (startFrame || 0) * FRAME_INTERVAL;
   }
+}
+
+function seekTo(frame) {
+  seeking = true;
+  startWs(currentSongId, frame);
+  audio.currentTime = frame * FRAME_INTERVAL;
+  if (audio.paused && playing) audio.play();
+  setTimeout(() => { seeking = false; }, 200);
 }
 
 overlay.addEventListener('click', () => {
   audio.play();
   playing = true;
   overlay.classList.add('hidden');
+  controls.classList.add('visible');
   nowPlaying.classList.add('visible');
   nowPlaying.textContent = songTitle;
 });
@@ -103,9 +119,34 @@ overlay.addEventListener('click', () => {
 audio.addEventListener('ended', () => {
   const idx = songs.findIndex(s => s.id === currentSongId);
   const next = (idx + 1) % songs.length;
-  selectSong(songs[next].id);
+  selectSong(songs[next].id, 0);
   audio.play();
   nowPlaying.textContent = songs[next].title;
+});
+
+audio.addEventListener('timeupdate', () => {
+  if (!seeking && audio.duration) {
+    seekBar.value = (audio.currentTime / audio.duration) * 1000;
+  }
+});
+
+seekBar.addEventListener('input', () => {
+  const pct = seekBar.value / 1000;
+  const t = pct * audio.duration;
+  if (audio.duration) {
+    const frame = Math.floor(t / FRAME_INTERVAL);
+    seekTo(frame);
+  }
+});
+
+btnPrev.addEventListener('click', () => {
+  const t = Math.max(0, audio.currentTime - 10);
+  seekTo(Math.floor(t / FRAME_INTERVAL));
+});
+
+btnNext.addEventListener('click', () => {
+  const t = Math.min(audio.duration, audio.currentTime + 10);
+  seekTo(Math.floor(t / FRAME_INTERVAL));
 });
 
 const clock = new THREE.Clock();

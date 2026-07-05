@@ -1,10 +1,14 @@
-export function connectWebSocket(songId, onData) {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const base = songId ? `/ws?song=${songId}` : '/ws';
-  const ws = new WebSocket(`${protocol}//${window.location.host}${base}`);
+export function connectWebSocket(songId, startFrame, onData) {
+  let url = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+  const params = [];
+  if (songId) params.push(`song=${songId}`);
+  if (startFrame > 0) params.push(`start=${startFrame}`);
+  if (params.length) url += '?' + params.join('&');
+
+  const ws = new WebSocket(url);
 
   ws.onopen = () => {
-    console.log(`[WS] conectado (song=${songId})`);
+    console.log(`[WS] conectado (song=${songId}, start=${startFrame})`);
     document.querySelector('.sub').textContent = 'conectado';
   };
 
@@ -15,7 +19,6 @@ export function connectWebSocket(songId, onData) {
 
   ws.onclose = () => {
     console.warn('[WS] cerrado');
-    document.querySelector('.sub').textContent = 'desconectado';
   };
 
   ws.onerror = (err) => {

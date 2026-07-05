@@ -85,7 +85,7 @@ async def lyrics(song_id: int):
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket, song: int = Query(default=0)):
+async def websocket_endpoint(ws: WebSocket, song: int = Query(default=0), start: int = Query(default=0)):
     await manager.connect(ws)
 
     songs = list_songs()
@@ -96,11 +96,12 @@ async def websocket_endpoint(ws: WebSocket, song: int = Query(default=0)):
     song_id = song if song > 0 else songs[0]["id"]
     frames = load_frames(song_id)
     total = len(frames)
+    start_idx = max(0, min(start, total - 1))
 
-    start = time.time()
+    stream_start = time.time()
     try:
-        for i, frame in enumerate(frames):
-            elapsed = time.time() - start
+        for i in range(start_idx, total):
+            elapsed = time.time() - stream_start
             target = i * FRAME_INTERVAL
             if target > elapsed:
                 await asyncio.sleep(target - elapsed)
@@ -109,7 +110,7 @@ async def websocket_endpoint(ws: WebSocket, song: int = Query(default=0)):
                 "frame": i,
                 "total": total,
                 "song_id": song_id,
-                "frequencies": frame,
+                "frequencies": frames[i],
             })
     except WebSocketDisconnect:
         manager.disconnect(ws)
