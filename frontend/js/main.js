@@ -6,6 +6,7 @@ import { connectWebSocket } from './ws_client.js';
 import { createParticles, updateParticles } from './particles.js';
 import { createBloom } from './postfx.js';
 import { createLyricsPanel, loadLyrics, renderLyrics, updateLyrics } from './lyrics.js';
+import { createColorBlast, updateColorBlast } from './colorblast.js';
 
 const FRAME_INTERVAL = 0.02322;
 
@@ -21,6 +22,9 @@ scene.add(record);
 
 const tonearm = createTonearm();
 scene.add(tonearm);
+
+const colorBlast = createColorBlast();
+scene.add(colorBlast.group);
 
 let latestFFT = null;
 let playing = false;
@@ -195,6 +199,7 @@ function animate() {
   }
 
   updateParticles(particleState, playing ? latestFFT : null, dt);
+  updateColorBlast(colorBlast, playing ? latestFFT : null, playing, dt);
 
   composer.render();
 }
